@@ -232,12 +232,14 @@ class AuditSubscriber implements EventSubscriber
 
         foreach ($this->associated as $entry) {
             list($source, $target, $mapping) = $entry;
-            $this->associate($em, $source, $target, $mapping);
+            $ch = ['id' => [null, (string) $target->getId()]];
+            $this->associate($em, $source, $target, $mapping, $ch);
         }
 
         foreach ($this->dissociated as $entry) {
             list($source, $target, $id, $mapping) = $entry;
-            $this->dissociate($em, $source, $target, $id, $mapping);
+            $ch = ['id' => [null, (string) $target->getId()]];
+            $this->dissociate($em, $source, $target, $id, $mapping, $ch);
         }
 
         foreach ($this->removed as $entry) {
@@ -252,26 +254,34 @@ class AuditSubscriber implements EventSubscriber
         $this->dissociated = [];
     }
 
-    protected function associate(EntityManager $em, $source, $target, array $mapping)
+    protected function associate(EntityManager $em, $source, $target, array $mapping, array $ch)
     {
+        $diff = $this->diff($em, $target, $ch);
+        if (empty($diff)) {
+            return; // if there is no entity diff, do not log it
+        }
         $this->audit($em, [
             'source' => $this->assoc($em, $source),
             'target' => $this->assoc($em, $target),
             'action' => 'associate',
             'blame' => $this->blame($em),
-            'diff' => null,
+            'diff' => json_encode($diff),
             'tbl' => $mapping['joinTable']['name'],
         ]);
     }
 
-    protected function dissociate(EntityManager $em, $source, $target, $id, array $mapping)
+    protected function dissociate(EntityManager $em, $source, $target, $id, array $mapping, array $ch)
     {
+        $diff = $this->diff($em, $target, $ch);
+        if (empty($diff)) {
+            return; // if there is no entity diff, do not log it
+        }
         $this->audit($em, [
             'source' => $this->assoc($em, $source),
             'target' => array_merge($this->assoc($em, $target), ['fk' => $id]),
             'action' => 'dissociate',
             'blame' => $this->blame($em),
-            'diff' => null,
+            'diff' => json_encode($diff),
             'tbl' => $mapping['joinTable']['name'],
         ]);
     }
